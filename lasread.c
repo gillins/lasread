@@ -3,6 +3,8 @@
 #include <stdint.h>
 #include <inttypes.h>
 
+/* TODO: endian swap */
+
 uint8_t lasread_u8(FILE *fh)
 {
     uint8_t val;
@@ -17,9 +19,23 @@ uint16_t lasread_u16(FILE *fh)
     return val;
 }
 
+int16_t lasread_s16(FILE *fh)
+{
+    int16_t val;
+    fread(&val, sizeof(val), 1, fh);
+    return val;
+}
+
 uint32_t lasread_u32(FILE *fh)
 {
     uint32_t val;
+    fread(&val, sizeof(val), 1, fh);
+    return val;
+}
+
+int32_t lasread_s32(FILE *fh)
+{
+    int32_t val;
     fread(&val, sizeof(val), 1, fh);
     return val;
 }
@@ -173,6 +189,59 @@ int main(int argc, char *argv[])
         printf("Points By return %d : %"PRIu64"\n", c, nNumPointsByReturn);
     }
     
+    
+    /* ---------------------------- */
+    /* now read some points */
+    if( nPointRecordFormat != 7 ) 
+    {
+        fprintf(stderr, "Only support point format 7\n");
+        return 1;
+    }
+    
+    
+    for( uint64_t nPoint = 0; nPoint < nNumPoints; nPoint++ )
+    {
+        fseek(fh, nOffsetPointData + (nPoint * nPointRecordLength), SEEK_SET);
+
+        int32_t nX = lasread_s32(fh);
+        int32_t nY = lasread_s32(fh);
+        int32_t nZ = lasread_s32(fh);
+        double dX = (nX * dXScale) + dXOffset;
+        double dY = (nY * dYScale) + dYOffset;
+        double dZ = (nZ * dZScale) + dZOffset;
+        
+        uint16_t nIntensity = lasread_u16(fh);
+        uint8_t nTmp = lasread_u8(fh);
+        uint8_t nReturnNumber = nTmp & 0xf;
+        uint8_t nNumReturns = (nTmp & 0xf0) >> 4;
+        
+        nTmp = lasread_u8(fh);
+        uint8_t nClassFlags = nTmp & 0xf;
+        uint8_t nScannerChannel = (nTmp & 0x30) >> 4;
+        uint8_t nScanDirection = (nTmp & 0x40) >> 5;
+        uint8_t nEdgeFlightLine = (nTmp & 0x50) >> 6;
+        
+        uint8_t nClassification = lasread_u8(fh);
+        uint8_t nUserData = lasread_u8(fh);
+        
+        int16_t nScanAngle = lasread_s16(fh);
+        uint16_t nPointSourceID = lasread_u16(fh);
+        double dGPSTime = lasread_double(fh);
+        uint16_t nRed = lasread_u16(fh);
+        uint16_t nGreen = lasread_u16(fh);
+        uint16_t nBlue = lasread_u16(fh);
+        
+        printf("%f %f %f %"PRIu16" %"PRIu8" %"PRIu8" %"PRIu8" %"PRIu8" %"PRIu8" %"PRIu8" %"PRIu8" %"PRIu8" %"PRIi16" %"PRIu16" %f %"PRIu16" %"PRIu16" %"PRIu16"\n", 
+                    dX, dY, dZ, nIntensity, 
+                    nReturnNumber, nNumReturns, nClassFlags, nScannerChannel, nScanDirection, 
+                    nEdgeFlightLine, nClassification, nUserData, nScanAngle, nPointSourceID,
+                    dGPSTime, nRed, nGreen, nBlue);
+        
+        if( nPoint >= 10 )
+        {
+            break;
+        }
+    }
     
     fclose(fh);
 
